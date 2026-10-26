@@ -49,7 +49,7 @@ In short: **how big the move will be** is quite predictable, **which way it goes
 | `experiments.ipynb` | Everything behind the report: baselines, other models, look-back window, feature importance, error analysis, trading test. Saves the figures to `report/figures/` |
 | `btc_1h.csv` | Hourly prices since 2018, so you don't have to download them all again |
 | `report/` | The report (`.docx` and `.pdf`) and its figures |
-| `Dockerfile`, `render.yaml` | Deployment |
+| `Dockerfile`, `compose.yaml`, `.env.example`, `render.yaml` | Deployment: the container, running it on your own server (with Cloudflare Tunnel), and Render |
 
 ## Run it yourself
 
@@ -78,7 +78,30 @@ jupyter nbconvert --to notebook --execute --inplace experiments.ipynb   # about 
 
 ## Deploy it
 
-**Render (free):** push the repository to GitHub, then on [render.com](https://render.com) choose **New → Blueprint** and pick the repository. `render.yaml` sets up a free Docker web service in Frankfurt. The EU region matters: Binance's API refuses requests from some countries, such as the US.
+**Your own server, with Docker Compose:**
+
+```bash
+git clone https://github.com/tjommilaskus/ml-innlevering_2.git
+cd ml-innlevering_2
+docker compose up -d --build
+```
+
+The site is then on port 8000 of the server. It restarts by itself after a reboot, and Docker checks every minute that it answers. To update, run `git pull` and `docker compose up -d --build` again. The prices saved inside the container are reset to the ones in the repository when the container is recreated; the site then fetches the missing hours from Binance in a few seconds.
+
+**Make it public with Cloudflare Tunnel** (no open ports on the router; needs a domain on Cloudflare):
+
+1. In the [Cloudflare dashboard](https://one.dash.cloudflare.com), go to **Networks → Tunnels**, create a tunnel of type **Cloudflared**, and copy its token (the long string after `--token` in the install command).
+2. Add a public hostname (published application route) to the tunnel, for example `btc.yourdomain.com`, with service type **HTTP** and URL **`web:8000`** (the name of the website container in `compose.yaml`).
+3. On the server:
+
+   ```bash
+   cp .env.example .env    # then paste the token after TUNNEL_TOKEN= in .env
+   docker compose up -d --build
+   ```
+
+`.env` turns on the `tunnel` container and is ignored by git, so the token never ends up on GitHub.
+
+**Render (free):** on [render.com](https://render.com) choose **New → Blueprint** and pick the repository. `render.yaml` sets up a free Docker web service in Frankfurt. The EU region matters: Binance's API refuses requests from some countries, such as the US.
 
 **Anywhere else that runs containers:**
 
@@ -87,7 +110,7 @@ docker build -t btc-predictor .
 docker run -p 8000:8000 btc-predictor
 ```
 
-The container reads the port from the `PORT` environment variable (default 8000) and runs the site with gunicorn.
+The container reads the port from the `PORT` environment variable (default 8000) and runs the site with gunicorn as a normal (non-root) user.
 
 ## Sources
 

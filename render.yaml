@@ -1,0 +1,7 @@
+# Render blueprint: New > Blueprint on https://render.com and pick this repository
+services:
+  - type: web
+    name: btc-price-predictor
+    runtime: docker
+    plan: free
+    region: frankfurt  # in the EU, since Binance blocks some countries (like the US)

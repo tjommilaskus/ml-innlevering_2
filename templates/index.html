@@ -1,0 +1,137 @@
+{% macro month_picker(prefix, month, year, months, years) -%}
+<select name="{{ prefix }}_month" aria-label="{{ prefix|capitalize }} month">
+  {% for name in months %}<option value="{{ loop.index }}"{% if loop.index|string == month %} selected{% endif %}>{{ name }}</option>{% endfor %}
+</select>
+<select name="{{ prefix }}_year" aria-label="{{ prefix|capitalize }} year">
+  {% for y in years %}<option{% if y|string == year %} selected{% endif %}>{{ y }}</option>{% endfor %}
+</select>
+{%- endmacro %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BTC Price Predictor</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<div id="page">
+
+  <marquee scrollamount="5">
+    *** Welcome to the BTC Price Predictor!!! *** Prices straight from Binance, updated every hour ***
+    Powered by Python and Machine Learning *** This is NOT financial advice!!! ***
+  </marquee>
+
+  <h1>BTC Price Predictor</h1>
+  <p class="center"><span class="blink">NEW!</span> Now with week and month guesses <span class="blink">NEW!</span></p>
+
+  {% if forecasts %}
+  <div class="table-box">
+    <table class="results crystal">
+      <tr><th colspan="5">~*~ Crystal Ball: guesses for the future ~*~</th></tr>
+      <tr><th>What</th><th>Guess</th><th>80% sure it lands in</th><th>Expected move</th><th>Confident?</th></tr>
+      {% for f in forecasts %}
+      <tr{% if f.confident %} class="confident"{% endif %}>
+        <td class="label">{{ f.what }}<br><span class="small">{{ f.from }} to {{ f.to }} UTC</span></td>
+        <td><b>{{ f.price }}</b><br><span class="small">{{ f.change }}</span></td>
+        <td>{{ f.range }}</td>
+        <td>{{ f.move }}</td>
+        <td>{{ "YES!" if f.confident else "no" }}</td>
+      </tr>
+      {% endfor %}
+    </table>
+  </div>
+  <p class="center small">Based on prices until {{ latest }} UTC. Check below how good guesses like these were in the past.</p>
+  {% endif %}
+
+  <hr>
+
+  <form action="/" method="get">
+    <fieldset>
+      <legend>Check the guesses</legend>
+      <p class="tabs">
+        {% for key, p in periods.items() %}
+        {% if key == period %}<span class="tab active">{{ p.title }}</span>{% else %}<a class="tab" href="/?period={{ key }}">{{ p.title }}</a>{% endif %}
+        {% endfor %}
+      </p>
+      <input type="hidden" name="period" value="{{ period }}">
+      <p class="pick">
+        {% if period == "hour" %}
+        Every hour from
+        <input type="date" name="from_day" value="{{ from_day }}" min="2018-01-01" max="{{ today }}" aria-label="From day">
+        to
+        <input type="date" name="to_day" value="{{ to_day }}" min="2018-01-01" max="{{ today }}" aria-label="To day">
+        {% else %}
+        Every {{ periods[period].unit }} from {{ month_picker("from", from_month, from_year, months, years) }}
+        to {{ month_picker("to", to_month, to_year, months, years) }}
+        {% endif %}
+      </p>
+      <p class="small center">{{ periods[period].hint }}</p>
+      <p class="center"><input type="submit" value="Predict!"></p>
+    </fieldset>
+  </form>
+
+  {% if error %}
+  <p class="error">ERROR: {{ error }}</p>
+  {% endif %}
+
+  {% if rows %}
+  <hr>
+  <h2>Your predicted prices, {{ unit }} by {{ unit }}</h2>
+  <p class="center"><b>{{ showing }}</b></p>
+  <p class="center small">
+    The computer re-learns at the start of every month, only from prices it could have known then.
+    It has never seen the prices it guesses.
+    {% if unit == "week" %}<br>Each guess is the average price over the whole week.
+    {% elif unit == "month" %}<br>Each guess is the average price over 30 days from the 1st of the month.{% endif %}
+  </p>
+
+  <p class="center"><img class="chart" src="data:image/png;base64,{{ chart }}" alt="Chart of the predicted and the real BTC {{ what }}, with the 80% range"></p>
+
+  <table class="results report">
+    <tr><th colspan="2">Model report card</th></tr>
+    <tr><td class="label">Number of guesses</td><td>{{ guesses }}</td></tr>
+    <tr><td class="label">Accuracy of the price guess (average)</td><td><b>{{ avg_accuracy }}</b></td></tr>
+    <tr><td class="label">Accuracy if you just guess "same as the last price"</td><td>{{ naive_accuracy }}</td></tr>
+    <tr><td class="label">Average miss per {{ unit }}</td><td>{{ avg_miss }}</td></tr>
+    <tr><td class="label">Guessed the right direction (up or down)</td><td><b>{{ direction }}</b></td></tr>
+    <tr><td class="label">&nbsp;&nbsp;Chance that is just luck</td><td>{{ direction_luck }}</td></tr>
+    <tr><td class="label">Right direction, confident guesses only ({{ confident_guesses }})</td><td><b>{{ confident_direction }}</b></td></tr>
+    <tr><td class="label">&nbsp;&nbsp;Chance that is just luck</td><td>{{ confident_luck }}</td></tr>
+    <tr><td class="label">Real price inside the 80% range</td><td>{{ in_range }}</td></tr>
+    <tr><td class="label">Move size guess vs. guessing the average move</td><td>{{ move_skill }}</td></tr>
+  </table>
+  <p class="center small">
+    Any guess close to the last price already scores {{ naive_accuracy }}, so the direction is the real test:
+    a coin flip gets 50%.<br>
+    "Chance that is just luck" under 5% means the result is probably real.
+    The 80% range should hold the real price about 80% of the time.
+  </p>
+
+  <div class="table-box">
+    <table class="results">
+      <tr><th>{{ periods[period].column }}</th><th>Predicted {{ what }}</th><th>80% range</th><th>Real {{ what }}</th><th>Accuracy</th><th>Confident?</th></tr>
+      {% for row in rows %}
+      <tr{% if row.confident %} class="confident"{% endif %}><td>{{ row.time }}</td><td>{{ row.predicted }}</td><td>{{ row.range }}</td><td>{{ row.real }}</td><td>{{ row.accuracy }}</td><td>{{ "YES" if row.confident else "" }}</td></tr>
+      {% endfor %}
+    </table>
+  </div>
+  {% if rows_cut %}
+  <p class="center small">Showing the latest {{ rows|length }} of {{ guesses }} guesses. The report card and the chart use all of them.</p>
+  {% endif %}
+  {% endif %}
+
+  <hr>
+
+  <div id="footer">
+    <p><span class="construction"><b>UNDER CONSTRUCTION</b></span></p>
+    <p>You are visitor number <span class="counter">{{ visitors }}</span></p>
+    <p class="small">
+      Best viewed in Netscape Navigator 4.0 at 800x600<br>
+      Last updated: {{ latest }} UTC
+    </p>
+  </div>
+
+</div>
+</body>
+</html>
